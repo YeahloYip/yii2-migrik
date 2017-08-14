@@ -241,7 +241,7 @@ class StructureGenerator extends \yii\gii\Generator
             ]
         );
     }
-    
+
     /**
      * @inheritdoc
      */
@@ -253,17 +253,17 @@ class StructureGenerator extends \yii\gii\Generator
             return $this->generateBulkMigration();
         }
     }
-    
+
     /**
      * @inheritdoc
      */
     public function defaultTemplate()
     {
         $class = new \ReflectionClass($this);
-        
+
         return dirname($class->getFileName()) . '/default_structure';
     }
-    
+
     /**
      * @return array
      */
@@ -271,7 +271,7 @@ class StructureGenerator extends \yii\gii\Generator
     {
         return $this->_ignoredTables;
     }
-    
+
     /**
      * @return array
      */
@@ -279,7 +279,7 @@ class StructureGenerator extends \yii\gii\Generator
     {
         return $this->_tables;
     }
-    
+
     /**
      * Validates the [[tableName]] attribute.
      */
@@ -292,7 +292,7 @@ class StructureGenerator extends \yii\gii\Generator
         }
         return true;
     }
-    
+
     /**
      * @return CodeFile[]
      */
@@ -302,9 +302,9 @@ class StructureGenerator extends \yii\gii\Generator
         $allRelations = [];
         foreach ($this->getTables() as $tableName) {
             list(
-                $tableCaption, $tableAlias, $tableIndexes, $tableColumns, $tableRelations, $tablePk
-                )
-                = $this->collectTableInfo($tableName);
+                $tableCaption, $tableAlias, $tableIndexes, $tableColumns, $tableRelations, $tablePk, $tableComment
+            )
+            = $this->collectTableInfo($tableName);
             if (!empty($tableRelations)) {
                 $allRelations[] = $tableRelations;
             }
@@ -316,7 +316,8 @@ class StructureGenerator extends \yii\gii\Generator
                 'migrationName',
                 'tableColumns',
                 'tableIndexes',
-                'tablePk'
+                'tablePk',
+                'tableComment'
             );
             $files[] = new CodeFile(
                 Yii::getAlias($this->migrationPath) . '/' . $migrationName . '.php',
@@ -328,8 +329,8 @@ class StructureGenerator extends \yii\gii\Generator
             $migrationName = $this->nextPrefix . '_Relations';
             $params = [
                 'tableRelations' => $allRelations,
-                'migrationName'  => $migrationName,
-                'fkProps'        => ['onUpdate' => $this->fkOnUpdate, 'onDelete' => $this->fkOnDelete],
+                'migrationName' => $migrationName,
+                'fkProps' => ['onUpdate' => $this->fkOnUpdate, 'onDelete' => $this->fkOnDelete],
             ];
             $files[] = new CodeFile(
                 Yii::getAlias($this->migrationPath) . '/' . $migrationName . '.php',
@@ -338,7 +339,7 @@ class StructureGenerator extends \yii\gii\Generator
         }
         return $files;
     }
-    
+
     /**
      * @return CodeFile[]
      */
@@ -349,40 +350,41 @@ class StructureGenerator extends \yii\gii\Generator
         $allTables = [];
         foreach ($this->getTables() as $tableName) {
             list(
-                , $tableAlias, $tableIndexes, $tableColumns, $tableRelations, $tablePk
-                )
-                = $this->collectTableInfo($tableName);
-            
+                , $tableAlias, $tableIndexes, $tableColumns, $tableRelations, $tablePk, $tableComment
+            )
+            = $this->collectTableInfo($tableName);
+
             if (!empty($tableRelations)) {
                 $allRelations[] = $tableRelations;
             }
             $allTables[] = [
-                'alias'       => $tableAlias,
-                'indexes'     => $tableIndexes,
-                'columns'     => $tableColumns,
-                'tablePk'     => $tablePk,
-                'name'        => $tableName,
+                'alias' => $tableAlias,
+                'indexes' => $tableIndexes,
+                'columns' => $tableColumns,
+                'tablePk' => $tablePk,
+                'name' => $tableName,
+                'tableComment' => $tableComment,
             ];
         }
-        
+
         $suffix = 'Mass';
         if (($tables = $this->getTables()) && sizeof($tables) == 1) {
             $suffix = $tables[0];
         }
-        
+
         $migrationName = $this->prefix . '_' . $suffix;
         $params = [
-            'tableList'      => $allTables,
+            'tableList' => $allTables,
             'tableRelations' => $allRelations,
-            'migrationName'  => $migrationName,
-            'fkProps'        => ['onUpdate' => $this->fkOnUpdate, 'onDelete' => $this->fkOnDelete],
+            'migrationName' => $migrationName,
+            'fkProps' => ['onUpdate' => $this->fkOnUpdate, 'onDelete' => $this->fkOnDelete],
         ];
         $files[] = new CodeFile(
             Yii::getAlias($this->migrationPath) . '/' . $migrationName . '.php', $this->render('mass.php', $params)
         );
         return $files;
     }
-    
+
     /**
      * @param $tableName
      *
@@ -390,27 +392,39 @@ class StructureGenerator extends \yii\gii\Generator
      */
     protected function collectTableInfo($tableName)
     {
+
         $tableCaption = $this->getTableCaption($tableName);
         $tableAlias = $this->getTableAlias($tableCaption);
         $tableIndexes = $this->getTableResolver()->getIndexes($tableName);
         $tableColumns = $this->buildColumnDefinitions($tableName);
         $tablePk = $this->getTableResolver()->getPrimaryKeys($tableName);
+
         if (count($tablePk) == 1 && $this->checkIfPkColumnIsInteger($tablePk[0], $tableColumns) === true) {
             //prevent pk duplication, if it set in column definition
             $tablePk = [];
         }
         $relations = $this->getTableResolver()->getRelations($tableName);
-        array_walk($relations, function (&$value){
+        array_walk($relations, function (&$value) {
             $value['ftable'] = $this->getTableAlias($this->getTableCaption($value['ftable']));
         });
         $tableRelations = !empty($relations) ? [
-            'fKeys'      => $relations,
+            'fKeys' => $relations,
             'tableAlias' => $tableAlias,
-            'tableName'  => $tableName,
+            'tableName' => $tableName,
         ] : [];
-        return [$tableCaption, $tableAlias, $tableIndexes, $tableColumns, $tableRelations, $tablePk];
+
+        $tableComment = '';
+        $db = $this->getDbConnection();
+        if ($db->driverName == 'mysql') {
+            $dsn = $db->getSchema()->db->dsn;
+            $databaseName = substr(strrchr($dsn, '='), '1');
+            $tableSchemaQuery = $db->createCommand("SELECT table_name,engine,table_comment,table_collation FROM information_schema.tables WHERE table_name = '{$tableName}' and table_schema = '{$databaseName}' ORDER BY table_name DESC")->queryOne();
+            $tableComment = $tableSchemaQuery['table_comment'];
+        }
+
+        return [$tableCaption, $tableAlias, $tableIndexes, $tableColumns, $tableRelations, $tablePk, $tableComment];
     }
-    
+
     /**
      * @param $pk
      * @param $tableColumns

@@ -37,7 +37,7 @@ class <?= $migrationName ?> extends Migration
 <?php foreach ($tableColumns as $name => $data) :?>
                 '<?=$name?>'=> <?=$data;?>,
 <?php endforeach;?>
-            ],$tableOptions
+            ],$tableOptions . ' COMMENT="<?=$tableComment?>"'
         );
 <?php if (!empty($tableIndexes) && is_array($tableIndexes)) : ?>
 <?php foreach ($tableIndexes as $name => $data) :?>

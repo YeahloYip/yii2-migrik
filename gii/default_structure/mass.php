@@ -11,7 +11,7 @@
  *
  */
 
-echo "<?php\n";
+    echo "<?php\n";
 ?>
 
 use yii\db\Schema;
@@ -35,7 +35,8 @@ class <?= $migrationName ?> extends Migration
 <?php foreach ($tableData['columns'] as $name => $data) :?>
             '<?=$name?>'=> <?=$data;?>,
 <?php endforeach;?>
-        ], $tableOptions);
+        ], $tableOptions . ' COMMENT="<?=$tableData['tableComment']?>"'
+        );
 
 <?php if (!empty($tableData['indexes']) && is_array($tableData['indexes'])) :?>
 <?php foreach ($tableData['indexes'] as $name => $data) :?>
